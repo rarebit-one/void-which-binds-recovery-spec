@@ -1,0 +1,29 @@
+name: Pin Gate
+
+# Thin caller for the org-shared Actions-pinning gate (zizmor + pinact) in
+# rarebit-one/.github. Fails a PR that introduces a third-party action referenced
+# by a mutable tag or branch instead of a full commit SHA.
+#
+# The org "estate baseline" ruleset requires the pin-check status on main, and
+# this repo had no workflows, so no PR could ever satisfy it. It has no
+# third-party actions today, so the gate is green from its first run.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions: {}
+
+concurrency:
+  group: pin-gate-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  pin-check:
+    permissions:
+      contents: read
+    uses: rarebit-one/.github/.github/workflows/pin-check.yml@main
+    # NOT routed to the homelab, deliberately: this gate installs zizmor with
+    # `pipx`, which GitHub-hosted images ship and the homelab agents do not, so
+    # a homelab run dies with `pipx: command not found` (exit 127) -- a red gate
+    # for a missing tool, not a real finding, which is how a gate stops being read.
