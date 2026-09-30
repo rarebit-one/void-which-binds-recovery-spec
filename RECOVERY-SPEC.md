@@ -1,6 +1,6 @@
-# Voidbind recovery: the complete format
+# Void-Which-Binds recovery: the complete format
 
-This document is everything needed to recover a Voidbind identity, and the heyarr
+This document is everything needed to recover a Void-Which-Binds identity, and the heyarr
 vault data wrapped for it, from a written recovery secret, **without any voidbind or
 heyarr code**. It is meant to outlive the software. A ~270-line reference
 implementation that uses nothing beyond Python and the `cryptography` package is in
@@ -136,7 +136,7 @@ A secret may be split into SLIP-39 shares (<https://github.com/satoshilabs/slips
 
 - **The master secret is the 32 bytes of §1.** Combining shares yields those bytes,
   and so the same identity.
-- **The Voidbind profile:** one group, typically 2-of-3; iteration exponent 1;
+- **The Void-Which-Binds profile:** one group, typically 2-of-3; iteration exponent 1;
   extendable; SLIP-39 passphrase empty unless the owner chose one. A forgotten
   passphrase loses the secret. The profile is recorded in
   `docs/adr/0011-recovery-secret-shares-are-slip-39.md`.
@@ -154,8 +154,8 @@ A secret may be split into SLIP-39 shares (<https://github.com/satoshilabs/slips
    with the sheet or the user's records. With the reference:
    `python3 reference.py identity < secret.txt`.
 3. **Rebuild access.**
-   - If the Voidbind apps still exist, *Restore* in Cruciform, or
-     `voidbind identity recover --secret-file -`, re-admits a device as the same
+   - If the Void-Which-Binds apps still exist, *Restore* in Cruciform, or
+     `void-which-binds identity recover --secret-file -`, re-admits a device as the same
      identity.
    - If they don't, the keys of §3 are the identity.
 4. **Reach vault data.**
@@ -168,9 +168,9 @@ A secret may be split into SLIP-39 shares (<https://github.com/satoshilabs/slips
 
 ## 8. Getting the tools
 
-Every voidbind-go release carries the following, and each release of this
+Every void-which-binds-go release carries the following, and each release of this
 public repository mirrors them unchanged:
-- static `voidbind` binaries for Linux, macOS and Windows on amd64 and arm64;
+- static `void-which-binds` binaries (named `voidbind` before v0.18.0, when the repo was `voidbind-go`) for Linux, macOS and Windows on amd64 and arm64; <!-- r1:keep -->
 - this document and `reference.py`;
 - a `SHA256SUMS` signed keyless with Sigstore cosign by the release workflow.
 
@@ -179,7 +179,7 @@ To check a download:
 ```
 cosign verify-blob --bundle SHA256SUMS.cosign.bundle \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
-  --certificate-identity-regexp '^https://github.com/rarebit-one/voidbind-go/\.github/workflows/release\.yml@refs/tags/v' \
+  --certificate-identity-regexp '^https://github.com/rarebit-one/(voidbind-go|void-which-binds-go)/\.github/workflows/release\.yml@refs/tags/v' \
   SHA256SUMS
 sha256sum --ignore-missing -c SHA256SUMS
 ```
@@ -189,7 +189,7 @@ their own.
 
 ## 9. Known-answer vectors
 
-Every value above is pinned in `vectors/` (mirrored from voidbind-go's
+Every value above is pinned in `vectors/` (mirrored from void-which-binds-go's
 `testvectors/vectors/`), and the reference implementation checks itself against them
 (`python3 reference.py selftest vectors`):
 
@@ -205,4 +205,4 @@ Every value above is pinned in `vectors/` (mirrored from voidbind-go's
 - `slip39/vectors.json` holds Trezor's official SLIP-39 vectors.
 
 The Go implementation replays the same files (`go test ./recovery ./encryption`),
-and voidbind-kmp copies them verbatim.
+and void-which-binds-kmp copies them verbatim.
