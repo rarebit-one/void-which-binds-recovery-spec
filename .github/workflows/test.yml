@@ -1,0 +1,61 @@
+name: test
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: test-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  # The independent reference must agree with the vectors it ships beside.
+  selftest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - name: reference.py selftest
+        run: |
+          python3 -m venv "$RUNNER_TEMP/venv"
+          "$RUNNER_TEMP/venv/bin/pip" install --quiet cryptography
+          "$RUNNER_TEMP/venv/bin/python" -I reference.py selftest vectors
+
+  # void-which-binds-go is the source of truth for the recovery format. The spec,
+  # reference.py and vectors/ here must match it byte for byte at the commit in
+  # VOID_WHICH_BINDS_GO_REF, so this public copy can never silently go stale
+  # again. void-which-binds-go is private and this repo is PUBLIC, so the read
+  # uses a ONE-HOUR, READ-ONLY installation token for that one repository (org
+  # release-bot App), never a broad PAT. Fork and Dependabot PRs get no secrets:
+  # the token step is skipped for them and the check is skipped with a warning.
+  drift:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - id: library-token
+        if: github.actor != 'dependabot[bot]' && (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository)
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          app-id: ${{ vars.RELEASE_BOT_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_BOT_PRIVATE_KEY }}
+          owner: rarebit-one
+          repositories: void-which-binds-go
+          permission-contents: read
+      - name: diff against void-which-binds-go at the pinned ref
+        env:
+          VOID_WHICH_BINDS_GO_TOKEN: ${{ steps.library-token.outputs.token }}
+        run: |
+          if [ -z "$VOID_WHICH_BINDS_GO_TOKEN" ]; then
+            echo "::warning::no void-which-binds-go token (fork or Dependabot PR?); skipping the drift check"
+            exit 0
+          fi
+          scripts/check-drift.sh

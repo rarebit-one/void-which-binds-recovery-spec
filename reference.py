@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
-"""Voidbind / heyarr recovery, reimplemented from docs/RECOVERY-SPEC.md alone.
+"""Void-Which-Binds / heyarr recovery, reimplemented from docs/RECOVERY-SPEC.md alone.
 
-This file exists so a written recovery secret stays usable even if no voidbind or
-heyarr code survives. It needs Python 3.9+ and the `cryptography` package
+This file exists so a written recovery secret stays usable even if no
+Void-Which-Binds or heyarr code survives. It implements recovery-spec v2, the
+gen2 format (secrets beginning "void-which-binds1"); a retired gen1 secret
+("heyarr1...") is refused (RECOVERY-SPEC.md section 10). It needs Python 3.9+ and the `cryptography` package
 (`pip install cryptography`) for Ed25519, X25519 and ChaCha20-Poly1305. Everything
 else (bech32m, HKDF, HChaCha20, the fingerprint, the blob format) is written out
 here in full.
@@ -27,11 +29,12 @@ from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey, X
 from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
 from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 
-# --- §2 the secret: bech32m (BIP-350), HRP "heyarr", 32 bytes ------------------
+# --- §2 the secret: bech32m (BIP-350), HRP "void-which-binds", 32 bytes --------
 
 CHARSET = "qpzry9x8gf2tvdw0s3jn54khce6mua7l"
 BECH32M_CONST = 0x2BC830A3
-HRP = "heyarr"
+HRP = "void-which-binds"
+RETIRED_HRP = "heyarr"  # gen1, refused (RECOVERY-SPEC.md section 10)
 
 
 def _polymod(values):
@@ -58,6 +61,9 @@ def parse_secret(text):
     s = s.lower()
     pos = s.rfind("1")
     hrp, data = s[:pos], s[pos + 1:]
+    if hrp == RETIRED_HRP:
+        raise ValueError("a retired generation-1 (heyarr1...) secret: readable only via "
+                         "void-which-binds-go's migrate/gen1 until v0.20.0")
     if hrp != HRP:
         raise ValueError("prefix is %r, expected %r" % (hrp, HRP))
     try:
@@ -99,8 +105,8 @@ def format_secret(entropy):
 
 # --- §3 derivation: HKDF-SHA256 (RFC 5869) --------------------------------------
 
-LABEL_USER_IDENTITY = b"heyarr/recovery/v1/user-identity-ed25519-seed"
-LABEL_USER_ENCRYPTION = b"heyarr/recovery/v1/user-encryption-x25519-seed"
+LABEL_USER_IDENTITY = b"void-which-binds/recovery/v1/user-identity-ed25519-seed"
+LABEL_USER_ENCRYPTION = b"void-which-binds/recovery/v1/user-encryption-x25519-seed"
 
 
 def hkdf_sha256(ikm, salt, info, length=32):
@@ -129,7 +135,7 @@ def recovery_encryption_key(entropy):
 
 # --- §4 the fingerprint ---------------------------------------------------------
 
-FINGERPRINT_LABEL = b"voidbind/user-fingerprint/v1"
+FINGERPRINT_LABEL = b"void-which-binds/user-fingerprint/v1"
 
 
 def fingerprint(user_pub):
@@ -140,7 +146,7 @@ def fingerprint(user_pub):
 
 # --- §5 unwrapping a space key: X25519 + HKDF + XChaCha20-Poly1305 ---------------
 
-WRAP_INFO = b"heyarr/space-key-wrap/v1"
+WRAP_INFO = b"void-which-binds/space-key-wrap/v1"
 
 
 def _rotl(v, n):

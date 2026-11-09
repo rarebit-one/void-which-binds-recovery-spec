@@ -1,0 +1,3 @@
+# void-which-binds-go commit the spec, reference.py and vectors/ are copied from.
+# v0.28.1. Bump only together with a fresh copy (scripts/check-drift.sh).
+f225589a04615e10f297f68747411b53d5c7f5bd

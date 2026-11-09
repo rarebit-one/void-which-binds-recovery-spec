@@ -15,7 +15,7 @@ case (ADR-0011) and pins the file's SHA-256, so a change here fails the build.
 Each entry is `[description, mnemonics, master_secret_hex, xprv]`. Every case
 uses the passphrase `TREZOR`. An empty `master_secret_hex` means the mnemonics
 must be refused. `xprv` is the BIP-32 root key of the master secret; it is a
-wallet concern and voidbind does not check it.
+wallet concern and Void-Which-Binds does not check it.
 
 The 45 cases cover 128- and 256-bit secrets, with and without the extendable
 flag: single shares, 2-of-3 and multi-group sharing, and the refusals (bad
