@@ -1,19 +1,26 @@
 # Void-Which-Binds recovery: the complete format
 
 This document is everything needed to recover a Void-Which-Binds identity, and the heyarr
-vault data wrapped for it, from a written recovery secret, **without any voidbind or
+vault data wrapped for it, from a written recovery secret, **without any Void-Which-Binds or
 heyarr code**. It is meant to outlive the software. A ~270-line reference
 implementation that uses nothing beyond Python and the `cryptography` package is in
-[`reference.py`](reference.py). It is checked against the
+[`recovery/reference.py`](recovery/reference.py). It is checked against the
 known-answer vectors listed in §9.
 
 If you are an heir or an executor holding a sheet titled **Recovery secret**, read
 §1 and then §7.
 
+This is **recovery-spec v2**, the generation-2 (gen2) format of
+[ADR-0022](adr/0022-gen2-hard-cutover.md). Gen2 secrets begin `void-which-binds1`.
+A generation-1 secret, beginning `heyarr1`, is **retired**: current software
+refuses it (`recovery.ParseSecret` returns `ErrGenerationRetired`), and it is
+readable only through void-which-binds-go's read-only `migrate/gen1` package,
+for the cutover, until v0.20.0 removes it. See §10.
+
 ## 1. What a recovery secret is
 
 A recovery secret is 32 random bytes (256 bits), written as a checksummed string
-beginning `heyarr1` (§2). Every key of the identity is derived from those bytes
+beginning `void-which-binds1` (§2). Every key of the identity is derived from those bytes
 (§3), so the secret alone rebuilds the identity on any machine, offline.
 
 - It is the identity's **root authority** ("genesis"). Anyone holding it can act as
@@ -25,18 +32,19 @@ beginning `heyarr1` (§2). Every key of the identity is derived from those bytes
 
 ## 2. The written form: bech32m
 
-The secret is **bech32m** (BIP-350) with human-readable part `heyarr`.
+The secret is **bech32m** (BIP-350) with human-readable part `void-which-binds`.
 
 - Data is the 32 bytes regrouped 8→5 bits with zero padding: 52 symbols. It is
   followed by the 6-symbol bech32m checksum (constant `0x2bc830a3`). The whole
-  string is 65 characters: `heyarr1` plus 58 symbols.
+  string is 75 characters: `void-which-binds1` plus 58 symbols. The separator is
+  the **last** `1`; the human-readable part contains none.
 - The alphabet is `qpzry9x8gf2tvdw0s3jn54khce6mua7l`. It contains no `1`, `b`, `i`
   or `o`.
 - **Reading back:**
   - Ignore all whitespace. The secret is displayed and written in groups of four
     characters.
   - Fold case: an all-upper-case string is valid, and is what the QR code on a
-    sheet carries (it keeps the code in QR alphanumeric mode). A string mixing
+    sheet carries (it keeps the code in QR alphanumeric mode, `-` included). A string mixing
     upper and lower case is invalid.
   - Refuse a failed checksum. It catches any single-character transcription error,
     and a mistyped secret must never be treated as a different identity.
@@ -51,11 +59,11 @@ Every key is HKDF-SHA256 (RFC 5869) over the 32 secret bytes:
 
 | Key | HKDF info | Output used as |
 |---|---|---|
-| User identity (signing) | `heyarr/recovery/v1/user-identity-ed25519-seed` | an Ed25519 private-key seed (RFC 8032). Its public key is the **user ID** |
-| Recovery encryption key | `heyarr/recovery/v1/user-encryption-x25519-seed` | an X25519 private key (RFC 7748, clamped as usual). Its public key is the **recovery recipient** |
+| User identity (signing) | `void-which-binds/recovery/v1/user-identity-ed25519-seed` | an Ed25519 private-key seed (RFC 8032). Its public key is the **user ID** |
+| Recovery encryption key | `void-which-binds/recovery/v1/user-encryption-x25519-seed` | an X25519 private key (RFC 7748, clamped as usual). Its public key is the **recovery recipient** |
 
-The labels say `heyarr` for historical reasons. They define the identity and never
-change.
+The labels define the identity. They never change within a generation: a new
+label is a new identity, which is what the gen2 re-genesis was (§10).
 
 **Rendering.** A user ID is written `ed25519:` followed by the 32-byte public key in
 lowercase hex. The recovery recipient is written `x25519:` followed by its 32-byte
@@ -64,7 +72,7 @@ public key in lowercase hex.
 ## 4. The fingerprint
 
 ```
-fingerprint = base32( SHA-256( "voidbind/user-fingerprint/v1" ‖ 0x00 ‖ user_public_key )[0:10] )
+fingerprint = base32( SHA-256( "void-which-binds/user-fingerprint/v1" ‖ 0x00 ‖ user_public_key )[0:10] )
 ```
 
 - The encoding is RFC 4648 base32 (`A–Z`, `2–7`) with no padding, giving 16
@@ -90,7 +98,7 @@ where
 
 ```
 shared   = X25519(e_priv, recipient_pub)          -- recovered as X25519(recovery_priv, e_pub)
-wrap_key = HKDF-SHA256(IKM = shared, salt = e_pub ‖ recipient_pub, info = "heyarr/space-key-wrap/v1", L = 32)
+wrap_key = HKDF-SHA256(IKM = shared, salt = e_pub ‖ recipient_pub, info = "void-which-binds/space-key-wrap/v1", L = 32)
 ```
 
 XChaCha20-Poly1305 is draft-irtf-cfrg-xchacha:
@@ -152,7 +160,7 @@ A secret may be split into SLIP-39 shares (<https://github.com/satoshilabs/slips
    *k* of them (§6).
 2. **Check it.** Derive the user public key and fingerprint (§3, §4), and compare
    with the sheet or the user's records. With the reference:
-   `python3 reference.py identity < secret.txt`.
+   `python3 recovery/reference.py identity < secret.txt`.
 3. **Rebuild access.**
    - If the Void-Which-Binds apps still exist, *Restore* in Cruciform, or
      `void-which-binds identity recover --secret-file -`, re-admits a device as the same
@@ -160,7 +168,7 @@ A secret may be split into SLIP-39 shares (<https://github.com/satoshilabs/slips
    - If they don't, the keys of §3 are the identity.
 4. **Reach vault data.**
    - Take the recovery-recipient wrapped copies from a recovery blob
-     (`python3 reference.py blob FILE < secret.txt`) or from a heyarr
+     (`python3 recovery/reference.py blob FILE < secret.txt`) or from a heyarr
      database.
    - Unwrap them (§5.1), then decrypt content (§5.2).
    - The encrypted content itself is replicated across the heyarr peers; the
@@ -168,8 +176,7 @@ A secret may be split into SLIP-39 shares (<https://github.com/satoshilabs/slips
 
 ## 8. Getting the tools
 
-Every void-which-binds-go release carries the following, and each release of this
-public repository mirrors them unchanged:
+Every void-which-binds-go release carries:
 - static `void-which-binds` binaries (named `voidbind` before v0.18.0, when the repo was `voidbind-go`) for Linux, macOS and Windows on amd64 and arm64; <!-- r1:keep -->
 - this document and `reference.py`;
 - a `SHA256SUMS` signed keyless with Sigstore cosign by the release workflow.
@@ -189,9 +196,9 @@ their own.
 
 ## 9. Known-answer vectors
 
-Every value above is pinned in `vectors/` (mirrored from void-which-binds-go's
-`testvectors/vectors/`), and the reference implementation checks itself against them
-(`python3 reference.py selftest vectors`):
+Every value above is pinned in `testvectors/vectors/` of the void-which-binds-go
+repository, and the reference implementation checks itself against them
+(`python3 recovery/reference.py selftest testvectors/vectors`):
 
 - `recovery/*.json` holds, for fixed entropy:
   - the bech32m secret, in lower and upper case;
@@ -206,3 +213,23 @@ Every value above is pinned in `vectors/` (mirrored from void-which-binds-go's
 
 The Go implementation replays the same files (`go test ./recovery ./encryption`),
 and void-which-binds-kmp copies them verbatim.
+
+## 10. Generations
+
+Gen2 is the same format as gen1 under new strings: no new cryptography and no new
+shapes ([ADR-0013](adr/0013-gen2-rename-to-void-which-binds-and-re-genesis.md),
+[ADR-0022](adr/0022-gen2-hard-cutover.md)). Because every label differs, the same
+32 bytes derive a **different** identity in each generation. Gen1 is retired:
+
+| What | gen1 (retired) | gen2 (this document) |
+|---|---|---|
+| bech32m human-readable part | `heyarr` (65 characters) | `void-which-binds` (75 characters) |
+| Identity seed label | `heyarr/recovery/v1/user-identity-ed25519-seed` | `void-which-binds/recovery/v1/user-identity-ed25519-seed` |
+| Encryption seed label | `heyarr/recovery/v1/user-encryption-x25519-seed` | `void-which-binds/recovery/v1/user-encryption-x25519-seed` |
+| Space-key wrap label | `heyarr/space-key-wrap/v1` | `void-which-binds/space-key-wrap/v1` |
+| Fingerprint label | `voidbind/user-fingerprint/v1` | `void-which-binds/user-fingerprint/v1` |
+
+A gen1 sheet is meant to be destroyed after the cutover, and every space key is
+rotated then, so a gen1 secret should open nothing current. Until v0.20.0 the
+read-only `migrate/gen1` package of void-which-binds-go reads a gen1 secret and a
+gen1 recovery blob, for the cutover's rewrap only.
